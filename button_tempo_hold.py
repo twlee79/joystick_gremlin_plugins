@@ -27,6 +27,15 @@ vjoy_btn = VirtualInputVariable(
     [gremlin.common.InputType.JoystickButton],
 )
 
+cancel_enable = BoolVariable("Cancel button enabled", "Enables cancel button.", False)
+
+tempo_cancel_btn = PhysicalInputVariable(
+    "Tempo cancel button (physical)",
+    "Button which will suppress tempo if pressed.",
+    [gremlin.common.InputType.JoystickButton],
+    is_optional=True,
+)
+
 hold1_enable = BoolVariable("Hold 1: Enable", "Enables Hold 1.", False)
 
 hold1_description = StringVariable(
@@ -89,6 +98,34 @@ target_input_id = vjoy_btn.input_id
 gremlin.util.log(
     f"{_PLUGIN_NAME}: Target vjoy_id: {target_vjoy_id}; input_id {target_input_id}"
 )
+
+# Cancel button
+# Is pressed, will cancel any ongoing Tempo
+cancel_is_enabled = bool(cancel_enable.value)
+
+# Prepare cancel decorator
+if cancel_is_enabled:
+    if not tempo_cancel_btn.value:
+        gremlin.util.log(f"{_PLUGIN_NAME}: Invalid cancel button, cancel disabled")
+        cancel_is_enabled = False
+    else:
+        gremlin.util.log(f"{_PLUGIN_NAME}: Cancel button is {tempo_cancel_btn.value}")
+        tempo_cancel_btn.value
+        cancel_decorator = tempo_cancel_btn.create_decorator(mode.value)
+
+        @cancel_decorator.button(tempo_cancel_btn.input_id)
+        def cancel_button(event):
+            global input_button_start_time
+            if _DEBUG:
+                gremlin.util.log(
+                    f"{_PLUGIN_NAME}: Cancel button state change: {event.is_pressed}"
+                )
+            if event.is_pressed:
+                input_button_start_time = 0
+
+
+if not cancel_is_enabled:
+    gremlin.util.log(f"{_PLUGIN_NAME}: Cancel button disabled")
 
 hold1_is_enabled = bool(hold1_enable.value)  # seems to have value '2' if enabled?
 hold1_tempo_value = hold1_tempo_delay.value
@@ -208,7 +245,8 @@ def input_button(event, joy, vjoy):
         curtime = time.time()
         if hold1_is_enabled:
             if (
-                curtime >= input_button_start_time + hold1_tempo_value
+                input_button_start_time > 0
+                and curtime >= input_button_start_time + hold1_tempo_value
                 and check_hold1_modifier(joy, vjoy)
             ):
                 if _DEBUG:
