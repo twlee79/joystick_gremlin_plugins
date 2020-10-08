@@ -101,8 +101,9 @@ activated if this longer time is exceeded, otherwise `Hold 1` is processed. If
 a shorter tempo delay is used for `Hold 2`, it will always activate and `Hold 1`
 will never be processed.
 
-To use: Simply install using "Add Plugin" in Joystick Gremling (v13.3 tested), 
-and set up the plugin options.
+To use: Download the file [`button_hold.py`](https://raw.githubusercontent.com/twlee79/joystick_gremlin_plugins/master/button_hold.py),
+and install it using "Add Plugin" in Joystick Gremlin (v13.3 tested). Set up options
+and the plugin will run when Joystick Gremlin is activated.
 
 Note: This repository also houses some test/example Joystick Gremlin plugins that
 are not described here.
