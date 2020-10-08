@@ -121,13 +121,16 @@ are not described here.
 # -------------------------------------------------------------------------------
 # ### Change log
 #
+# version 1.0 2020-10-09
+# : First release version.
+#
 # version 0.9dev3 2020-10-09
 # : Add hold multiplier to allow >100 s holds.
-# : Add DEBUG option
+# : Add DEBUG option.
 #
 # version 0.9dev2 2020-10-09
 # : Removed physical modifier; user can map a physical button to a vjoy button
-# for use as a modifier
+# for use as a modifier.
 #
 # version 0.9dev1 2020-10-09
 # : Initial working version, with two holds, tempo delay, physical/virtual 
