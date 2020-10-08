@@ -100,7 +100,7 @@ gremlin.util.log(
 )
 
 # Cancel button
-# Is pressed, will cancel any ongoing Tempo
+# If pressed, will cancel any ongoing Tempo
 cancel_is_enabled = bool(cancel_enable.value)
 
 # Prepare cancel decorator
@@ -127,6 +127,7 @@ if cancel_is_enabled:
 if not cancel_is_enabled:
     gremlin.util.log(f"{_PLUGIN_NAME}: Cancel button disabled")
 
+# Options for hold1
 hold1_is_enabled = bool(hold1_enable.value)  # seems to have value '2' if enabled?
 hold1_tempo_value = hold1_tempo_delay.value
 hold1_hold_value = hold1_hold_time.value
@@ -151,6 +152,10 @@ else:
     hold1_modifier_guid = None
     hold1_modifier_input_id = None
 
+if not hold1_modifier_is_enabled:
+    gremlin.util.log(f"{_PLUGIN_NAME}: Hold1 modifier disabled")
+
+
 if hold1_vjoy_modifier_is_enabled:
     hold1_vjoy_modifier_id = hold1_vjoy_modifier_btn.vjoy_id
     hold1_vjoy_modifier_input_id = hold1_vjoy_modifier_btn.input_id
@@ -160,6 +165,9 @@ if hold1_vjoy_modifier_is_enabled:
 else:
     hold1_vjoy_modifier_id = None
     hold1_vjoy_modifier_input_id = None
+
+if not hold1_vjoy_modifier_is_enabled:
+    gremlin.util.log(f"{_PLUGIN_NAME}: Hold1 vJoy modifier disabled")
 
 
 # Prepare decorator
