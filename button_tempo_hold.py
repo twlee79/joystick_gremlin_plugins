@@ -27,10 +27,10 @@ vjoy_btn = VirtualInputVariable(
     [gremlin.common.InputType.JoystickButton],
 )
 
-cancel_enable = BoolVariable("Cancel button enabled", "Enables cancel button.", False)
+cancel_enable = BoolVariable("Cancel Button Enable", "Enables cancel button.", False)
 
 tempo_cancel_btn = PhysicalInputVariable(
-    "Tempo cancel button (physical)",
+    "Tempo cancel button",
     "Button which will suppress tempo if pressed.",
     [gremlin.common.InputType.JoystickButton],
     is_optional=True,
@@ -370,7 +370,7 @@ def input_button(event, joy, vjoy):
         if _DEBUG:
             gremlin.util.log(f"{_PLUGIN_NAME}: Processing release...")
         curtime = time.time()
-        if hold2_is_enabled and (
+        if hold2_is_enabled and ( # test hold2 first
             input_button_start_time > 0
             and curtime >= input_button_start_time + hold2_tempo_value
             and check_hold2_modifier(joy, vjoy)
@@ -380,14 +380,6 @@ def input_button(event, joy, vjoy):
             # tempo activated
             # activate hold: start thread and do not release until
             #   reaching input_button_start_time + hold2_hold_time
-            if hold_timer is not None:
-                # expect this not to occur (should be cancelled on press)
-                if _DEBUG:
-                    gremlin.util.log(
-                        f"{_PLUGIN_NAME}: (release) Cancelling previous Hold2 timer."
-                    )
-                hold_timer.cancel()
-                hold_timer = None
             remaining_time = input_button_start_time + hold2_hold_value - curtime
             if _DEBUG:
                 gremlin.util.log(
@@ -412,14 +404,6 @@ def input_button(event, joy, vjoy):
             # tempo activated
             # activate hold: start thread and do not release until
             #   reaching input_button_start_time + hold1_hold_time
-            if hold_timer is not None:
-                # expect this not to occur (should be cancelled on press)
-                if _DEBUG:
-                    gremlin.util.log(
-                        f"{_PLUGIN_NAME}: (release) Cancelling previous Hold1 timer."
-                    )
-                hold_timer.cancel()
-                hold_timer = None
             remaining_time = input_button_start_time + hold1_hold_value - curtime
             if _DEBUG:
                 gremlin.util.log(
