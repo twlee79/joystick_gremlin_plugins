@@ -4,8 +4,36 @@ import threading
 
 from gremlin.user_plugin import *
 
-# Simple button test plugin
-_PLUGIN_NAME = "TempoHold"
+"""
+Joystick Gremlin Button Hold Plugin
+
+Implements a 'button hold' mapping for a physical button to an output vJoy 
+button with a programmed timed release of the virtual button under various
+customisable circumstances.
+"""
+
+
+_PLUGIN_NAME = "ButtonHold"
+_VERSION = '0.9dev1'
+# -------------------------------------------------------------------------------
+# Author:       Tet Woo Lee
+#
+# Created:      2020-10-09
+# Copyright:    © 2020 Tet Woo Lee
+# Licence:      GPLv3
+#
+# Dependencies: Joystick Gremlin, tested on v13.3
+# -------------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------------
+# ### Change log
+#
+# version 0.9dev1 2020-10-09
+# : Initial working version, with two holds, tempo delay, physical/virtual 
+# modifiers and a cancel button.
+# -------------------------------------------------------------------------------
+
+
 _DEBUG = True  # extra log messages
 
 # Settings
@@ -353,13 +381,13 @@ def input_button(event, joy, vjoy):
         # send 'pressed' to target
         output_button(True, vjoy)
         # store start time
-        if hold1_is_enabled:
+        if hold1_is_enabled or hold2_is_enabled:
             input_button_start_time = time.time()
             # cancel any current hold timer
             if hold_timer is not None:
                 if _DEBUG:
                     gremlin.util.log(
-                        f"{_PLUGIN_NAME}: (press) Cancelling previous Hold1 timer."
+                        f"{_PLUGIN_NAME}: (press) Cancelling previous Hold1/2 timer."
                     )
                 hold_timer.cancel()
                 hold_timer = None
