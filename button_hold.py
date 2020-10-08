@@ -14,7 +14,7 @@ customisable circumstances.
 
 
 _PLUGIN_NAME = "ButtonHold"
-_VERSION = '0.9dev2'
+_VERSION = '0.9dev3'
 # -------------------------------------------------------------------------------
 # Author:       Tet Woo Lee
 #
@@ -28,8 +28,12 @@ _VERSION = '0.9dev2'
 # -------------------------------------------------------------------------------
 # ### Change log
 #
+# version 0.9dev3 2020-10-09
+# : Add hold multiplier to allow >100 s holds.
+# : Add DEBUG option
+#
 # version 0.9dev2 2020-10-09
-# : Removed physical modifier, user can map a physical button to a vjoy button
+# : Removed physical modifier; user can map a physical button to a vjoy button
 # for use as a modifier
 #
 # version 0.9dev1 2020-10-09
@@ -38,7 +42,7 @@ _VERSION = '0.9dev2'
 # -------------------------------------------------------------------------------
 
 
-_DEBUG = True  # extra log messages
+_DEBUG = False  # extra log messages
 
 # Settings
 description = StringVariable(
@@ -59,7 +63,12 @@ vjoy_btn = VirtualInputVariable(
     [gremlin.common.InputType.JoystickButton],
 )
 
-cancel_enable = BoolVariable("Cancel Button Enable", "Enables cancel button.", False)
+alternating_mode_enable = BoolVariable(
+    "Enable Alternating Mode", 
+    "Enables alternating hold/cancel mode.", 
+    False)
+
+cancel_enable = BoolVariable("Enable Cancel Button", "Enables cancel button.", False)
 
 tempo_cancel_btn = PhysicalInputVariable(
     "Tempo cancel button",
@@ -88,13 +97,22 @@ hold1_tempo_delay = FloatVariable(
     "Long press delay to activate Hold 1 (s).",
     initial_value=0.5,
     min_value=0,
-    max_value=10,
+    max_value=600,
 )
 
 hold1_hold_time = FloatVariable(
     "Hold 1: Hold Time",
     "Time to hold virtual button before releasing for Hold 1 (s).",
     initial_value=5,
+    min_value=0,
+    max_value=1e6,
+)
+
+# Multiplier is needed as there appears to be hard limit of 99.99 s on a FloatVariable
+hold1_hold_time_multiplier = FloatVariable(
+    "Hold 1: Hold Time Multiplier",
+    "Multiplier for hold time.",
+    initial_value=1,
     min_value=0,
     max_value=1e6,
 )
@@ -123,13 +141,22 @@ hold2_tempo_delay = FloatVariable(
     "Long press delay to activate Hold 2 (s).",
     initial_value=0.5,
     min_value=0,
-    max_value=10,
+    max_value=600,
 )
 
 hold2_hold_time = FloatVariable(
     "Hold 2: Hold Time",
     "Time to hold virtual button before releasing for Hold 2 (s).",
     initial_value=5,
+    min_value=0,
+    max_value=1e6,
+)
+
+# Multiplier is needed as there appears to be hard limit of 99.99 s on a FloatVariable
+hold2_hold_time_multiplier = FloatVariable(
+    "Hold 2: Hold Time Multiplier",
+    "Multiplier for hold time.",
+    initial_value=1,
     min_value=0,
     max_value=1e6,
 )
@@ -146,6 +173,12 @@ hold2_vjoy_modifier_btn = VirtualInputVariable(
     is_optional=True,
 )
 
+enable_debug = BoolVariable(
+    "Enable Debug Mode", "Produces additional log messages.", False
+)
+
+_DEBUG = enable_debug.value
+
 # Process settings
 
 gremlin.util.log(f"{_PLUGIN_NAME}: Activating...")
@@ -157,6 +190,12 @@ target_input_id = vjoy_btn.input_id
 
 gremlin.util.log(
     f"{_PLUGIN_NAME}: Target vjoy_id: {target_vjoy_id}; input_id {target_input_id}"
+)
+
+alternating_mode_is_enabled = bool(alternating_mode_enable.value)
+
+gremlin.util.log(
+    f"{_PLUGIN_NAME}: Alternating mode enabled: {alternating_mode_is_enabled}"
 )
 
 # Cancel button
@@ -190,7 +229,7 @@ if not cancel_is_enabled:
 # Load options for hold1
 hold1_is_enabled = bool(hold1_enable.value)  # seems to have value '2' if enabled?
 hold1_tempo_value = hold1_tempo_delay.value
-hold1_hold_value = hold1_hold_time.value
+hold1_hold_value = hold1_hold_time.value * hold1_hold_time_multiplier.value
 
 hold1_vjoy_modifier_is_enabled = bool(hold1_use_vjoy_modifier.value)
 
@@ -214,7 +253,7 @@ if not hold1_vjoy_modifier_is_enabled:
 # Load options for hold2
 hold2_is_enabled = bool(hold2_enable.value)  # seems to have value '2' if enabled?
 hold2_tempo_value = hold2_tempo_delay.value
-hold2_hold_value = hold2_hold_time.value
+hold2_hold_value = hold2_hold_time.value * hold2_hold_time_multiplier.value
 
 hold2_vjoy_modifier_is_enabled = bool(hold2_use_vjoy_modifier.value)
 
@@ -259,7 +298,9 @@ def output_button(pressed_state, vjoy):
 def stop_hold(vjoy):
     if _DEBUG:
         gremlin.util.log(f"{_PLUGIN_NAME}: Ending hold from timer.")
+    global hold_timer
     output_button(False, vjoy)
+    hold_timer = None
 
 
 def check_hold1_modifier(joy, vjoy):
@@ -308,8 +349,18 @@ def input_button(event, joy, vjoy):
             gremlin.util.log(f"{_PLUGIN_NAME}: Processing press...")
         # send 'pressed' to target
         output_button(True, vjoy)
+        if alternating_mode_is_enabled and hold_timer:
+            # in alternating mode, any existing timer is cancel and no new
+            # timer is started
+            # this is to allow a user to cancel a time and trigger a release
+            # by pressing the button and releasing it
+            if _DEBUG:
+                gremlin.util.log(f"{_PLUGIN_NAME}: Alternating mode, cancelling timer.")
+            hold_timer.cancel()
+            hold_timer = None
+            input_button_start_time = 0
         # store start time
-        if hold1_is_enabled or hold2_is_enabled:
+        elif hold1_is_enabled or hold2_is_enabled:
             input_button_start_time = time.time()
             # cancel any current hold timer
             if hold_timer is not None:
@@ -321,7 +372,7 @@ def input_button(event, joy, vjoy):
                 hold_timer = None
         else:
             if _DEBUG:
-                gremlin.util.log(f"{_PLUGIN_NAME}: (press) Hold1 is not enabled.")
+                gremlin.util.log(f"{_PLUGIN_NAME}: (press) Hold1/2 is not enabled.")
     else:
         if _DEBUG:
             gremlin.util.log(f"{_PLUGIN_NAME}: Processing release...")
