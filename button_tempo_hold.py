@@ -9,6 +9,11 @@ _PLUGIN_NAME = "TempoHold"
 _DEBUG = True # extra log messages
 
 # Settings
+description = StringVariable(
+    "Description",
+    "Description of this plugin action",
+    "")
+
 mode = ModeVariable("Mode", "The mode to use for this mapping")
 
 btn_input = PhysicalInputVariable(
@@ -24,6 +29,11 @@ vjoy_btn = VirtualInputVariable(
 )
 
 hold1_enable = BoolVariable("Hold 1: Enable", "Enables Hold 1.", False)
+
+hold1_description = StringVariable(
+    "Hold1: Description",
+    "Description of hold 1 plugin action",
+    "")
 
 hold1_tempo_delay = FloatVariable(
     "Hold 1: Tempo Delay",
@@ -66,7 +76,7 @@ hold1_vjoy_modifier_btn = VirtualInputVariable(
 
 # DONE Optional modifier
 # TODO Add extra hold (Hold 2)
-# TODO Add Description generic, and one for all Holds
+# DONE Add Description generic, and one for all Holds
 # TODO Add Tempo Cancel button (set time to 0, and do a time != 0 check)
 
 # Process settings
