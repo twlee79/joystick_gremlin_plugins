@@ -54,6 +54,12 @@ hold1_use_modifier = BoolVariable(
     "Hold 1: Use Modifier", "Enables modifier button for hold 1.", False
 )
 
+hold1_modifier_selection = SelectionVariable(
+    "Hold 1: Use Modifier", 
+    "Modifier selection for hold 1.",
+    ["No modifier", "Physical modifier button", "vJoy modifier button"],
+)
+
 hold1_modifier_btn = PhysicalInputVariable(
     "Hold 1: Modifier Button (physical)",
     "Button which must be pressed to activate hold 1.",
@@ -96,8 +102,8 @@ hold1_is_enabled = bool(hold1_enable.value) # seems to have value '2' if enabled
 hold1_tempo_value = hold1_tempo_delay.value
 hold1_hold_value = hold1_hold_time.value
 
-hold1_modifier_is_enabled = bool(hold1_use_modifier.value)
-hold1_vjoy_modifier_is_enabled = bool(hold1_use_vjoy_modifier.value)
+hold1_modifier_is_enabled = hold1_modifier_selection.value==1
+hold1_vjoy_modifier_is_enabled = hold1_modifier_selection.value==2
 
 gremlin.util.log(
     f"{_PLUGIN_NAME}: Hold1 (Enabled: {hold1_is_enabled}) Tempo: {hold1_tempo_value} s; Hold {hold1_hold_value} s"
