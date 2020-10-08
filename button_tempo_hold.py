@@ -36,6 +36,15 @@ tempo_cancel_btn = PhysicalInputVariable(
     is_optional=True,
 )
 
+# Two set of hold options are enabled, which can be set with different tempos
+# or different modifiers
+# If using only different tempo times, note that longer tempo time should be
+# set as hold2: hold2 is tested first, so needs to be a longer time so that it
+# is only activated if this time is actually exceeded, otherwise hold1 is tested;
+# if hold2 is the shorter time, it will always be activated and hold1 is never 
+# # tested
+
+# Hold 1 options
 hold1_enable = BoolVariable("Hold 1: Enable", "Enables Hold 1.", False)
 
 hold1_description = StringVariable(
@@ -47,6 +56,7 @@ hold1_tempo_delay = FloatVariable(
     "Long press delay to activate Hold 1 (s).",
     initial_value=0.5,
     min_value=0,
+    max_value=10,
 )
 
 hold1_hold_time = FloatVariable(
@@ -80,11 +90,51 @@ hold1_vjoy_modifier_btn = VirtualInputVariable(
     is_optional=True,
 )
 
+# Hold 2 options
+hold2_enable = BoolVariable("Hold 2: Enable", "Enables Hold 2.", False)
 
-# DONE Optional modifier
-# TODO Add extra hold (Hold 2)
-# DONE Add Description generic, and one for all Holds
-# TODO Add Tempo Cancel button (set time to 0, and do a time != 0 check)
+hold2_description = StringVariable(
+    "Hold 2: Description", "Description of hold 2 plugin action", "", is_optional=True
+)
+
+hold2_tempo_delay = FloatVariable(
+    "Hold 2: Tempo Delay",
+    "Long press delay to activate Hold 2 (s).",
+    initial_value=0.5,
+    min_value=0,
+    max_value=10,
+)
+
+hold2_hold_time = FloatVariable(
+    "Hold 2: Hold Time",
+    "Time to hold virtual button before releasing for Hold 2 (s).",
+    initial_value=5,
+    min_value=0,
+    max_value=1e6,
+)
+
+hold2_use_modifier = BoolVariable(
+    "Hold 2: Use Modifier", "Enables modifier button for hold 2.", False
+)
+
+hold2_modifier_btn = PhysicalInputVariable(
+    "Hold 2: Modifier Button (physical)",
+    "Button which must be pressed to activate hold 2.",
+    [gremlin.common.InputType.JoystickButton],
+    is_optional=True,
+)
+
+# add both a physical button and vjoy modifier, to allow users to use either
+hold2_use_vjoy_modifier = BoolVariable(
+    "Hold 2: Use vJoy Modifier", "Enables vJoy modifier button for hold 2.", False
+)
+
+hold2_vjoy_modifier_btn = VirtualInputVariable(
+    "Hold 2: Modifier Button (vJoy)",
+    "vJoy button which must be pressed to activate hold 2.",
+    [gremlin.common.InputType.JoystickButton],
+    is_optional=True,
+)
 
 # Process settings
 
@@ -127,7 +177,7 @@ if cancel_is_enabled:
 if not cancel_is_enabled:
     gremlin.util.log(f"{_PLUGIN_NAME}: Cancel button disabled")
 
-# Options for hold1
+# Load options for hold1
 hold1_is_enabled = bool(hold1_enable.value)  # seems to have value '2' if enabled?
 hold1_tempo_value = hold1_tempo_delay.value
 hold1_hold_value = hold1_hold_time.value
@@ -168,6 +218,48 @@ else:
 
 if not hold1_vjoy_modifier_is_enabled:
     gremlin.util.log(f"{_PLUGIN_NAME}: Hold1 vJoy modifier disabled")
+
+# Load options for hold2
+hold2_is_enabled = bool(hold2_enable.value)  # seems to have value '2' if enabled?
+hold2_tempo_value = hold2_tempo_delay.value
+hold2_hold_value = hold2_hold_time.value
+
+hold2_modifier_is_enabled = bool(hold2_use_modifier.value)
+hold2_vjoy_modifier_is_enabled = bool(hold2_use_vjoy_modifier.value)
+
+gremlin.util.log(
+    f"{_PLUGIN_NAME}: Hold2 (Enabled: {hold2_is_enabled}) Tempo: {hold2_tempo_value} s; Hold {hold2_hold_value} s"
+)
+
+if hold2_modifier_is_enabled:
+    hold2_modifier_guid = hold2_modifier_btn.device_guid
+    hold2_modifier_input_id = hold2_modifier_btn.input_id
+    gremlin.util.log(
+        f"{_PLUGIN_NAME}: Hold2 modifier guid: {hold2_modifier_guid}; input_id {hold2_modifier_input_id}"
+    )
+    if hold2_modifier_guid is None or hold2_modifier_input_id is None:
+        hold2_modifier_is_enabled = False
+        gremlin.util.log(f"{_PLUGIN_NAME}: Hold2 modifier is invalid so is disabled")
+else:
+    hold2_modifier_guid = None
+    hold2_modifier_input_id = None
+
+if not hold2_modifier_is_enabled:
+    gremlin.util.log(f"{_PLUGIN_NAME}: Hold2 modifier disabled")
+
+
+if hold2_vjoy_modifier_is_enabled:
+    hold2_vjoy_modifier_id = hold2_vjoy_modifier_btn.vjoy_id
+    hold2_vjoy_modifier_input_id = hold2_vjoy_modifier_btn.input_id
+    gremlin.util.log(
+        f"{_PLUGIN_NAME}: Hold2 vJoy modifier guid: {hold2_vjoy_modifier_id}; input_id {hold2_vjoy_modifier_input_id}"
+    )
+else:
+    hold2_vjoy_modifier_id = None
+    hold2_vjoy_modifier_input_id = None
+
+if not hold2_vjoy_modifier_is_enabled:
+    gremlin.util.log(f"{_PLUGIN_NAME}: Hold2 vJoy modifier disabled")
 
 
 # Prepare decorator
@@ -223,6 +315,33 @@ def check_hold1_modifier(joy, vjoy):
         return True
 
 
+def check_hold2_modifier(joy, vjoy):
+    # if a modifier is enabled, return state of modifier
+    if hold2_modifier_is_enabled:
+        modifier_state = (
+            joy[hold2_modifier_guid].button(hold2_modifier_input_id).is_pressed
+        )
+        if _DEBUG:
+            gremlin.util.log(
+                f"{_PLUGIN_NAME}: Hold2 modifier enabled; pressed: {modifier_state}"
+            )
+        return modifier_state
+    elif hold2_vjoy_modifier_is_enabled:
+        modifier_state = (
+            vjoy[hold2_vjoy_modifier_id].button(hold2_vjoy_modifier_input_id).is_pressed
+        )
+        if _DEBUG:
+            gremlin.util.log(
+                f"{_PLUGIN_NAME}: Hold2 vjoy modifier enabled; pressed: {modifier_state}"
+            )
+        return modifier_state
+    else:
+        # no modifiers enabled, default to true
+        if _DEBUG:
+            gremlin.util.log(f"{_PLUGIN_NAME}: Hold2 no modifier enabled")
+        return True
+
+
 @input_decorator.button(btn_input.input_id)
 def input_button(event, joy, vjoy):
     if _DEBUG:
@@ -251,46 +370,73 @@ def input_button(event, joy, vjoy):
         if _DEBUG:
             gremlin.util.log(f"{_PLUGIN_NAME}: Processing release...")
         curtime = time.time()
-        if hold1_is_enabled:
-            if (
-                input_button_start_time > 0
-                and curtime >= input_button_start_time + hold1_tempo_value
-                and check_hold1_modifier(joy, vjoy)
-            ):
-                if _DEBUG:
-                    gremlin.util.log(f"{_PLUGIN_NAME}: Hold1 Tempo activated.")
-                # tempo activated
-                # activate hold: start thread and do not release until
-                #   reaching input_button_start_time + hold1_hold_time
-                if hold_timer is not None:
-                    # expect this not to occur (should be cancelled on press)
-                    if _DEBUG:
-                        gremlin.util.log(
-                            f"{_PLUGIN_NAME}: (release) Cancelling previous Hold1 timer."
-                        )
-                    hold_timer.cancel()
-                    hold_timer = None
-                remaining_time = input_button_start_time + hold1_hold_value - curtime
+        if hold2_is_enabled and (
+            input_button_start_time > 0
+            and curtime >= input_button_start_time + hold2_tempo_value
+            and check_hold2_modifier(joy, vjoy)
+        ):
+            if _DEBUG:
+                gremlin.util.log(f"{_PLUGIN_NAME}: Hold2 Tempo activated.")
+            # tempo activated
+            # activate hold: start thread and do not release until
+            #   reaching input_button_start_time + hold2_hold_time
+            if hold_timer is not None:
+                # expect this not to occur (should be cancelled on press)
                 if _DEBUG:
                     gremlin.util.log(
-                        f"{_PLUGIN_NAME}: Timed release for Hold1 is {remaining_time} s from now."
+                        f"{_PLUGIN_NAME}: (release) Cancelling previous Hold2 timer."
                     )
-                if remaining_time < 0:
-                    if _DEBUG:
-                        gremlin.util.log(
-                            f"{_PLUGIN_NAME}: Hold1 Hold time exceeded, sending release immediately."
-                        )
-                    output_button(False, vjoy)
-                else:
-                    hold_timer = threading.Timer(remaining_time, stop_hold, args=[vjoy])
-                    hold_timer.start()
-            else:
+                hold_timer.cancel()
+                hold_timer = None
+            remaining_time = input_button_start_time + hold2_hold_value - curtime
+            if _DEBUG:
+                gremlin.util.log(
+                    f"{_PLUGIN_NAME}: Timed release for Hold2 is {remaining_time} s from now."
+                )
+            if remaining_time < 0:
                 if _DEBUG:
                     gremlin.util.log(
-                        f"{_PLUGIN_NAME}: Hold1 Tempo not activated (delay not exceeded/modifier not pressed)."
+                        f"{_PLUGIN_NAME}: Hold2 Hold time exceeded, sending release immediately."
                     )
                 output_button(False, vjoy)
+            else:
+                hold_timer = threading.Timer(remaining_time, stop_hold, args=[vjoy])
+                hold_timer.start()
+        elif hold1_is_enabled and (
+            input_button_start_time > 0
+            and curtime >= input_button_start_time + hold1_tempo_value
+            and check_hold1_modifier(joy, vjoy)
+        ):
+            if _DEBUG:
+                gremlin.util.log(f"{_PLUGIN_NAME}: Hold1 Tempo activated.")
+            # tempo activated
+            # activate hold: start thread and do not release until
+            #   reaching input_button_start_time + hold1_hold_time
+            if hold_timer is not None:
+                # expect this not to occur (should be cancelled on press)
+                if _DEBUG:
+                    gremlin.util.log(
+                        f"{_PLUGIN_NAME}: (release) Cancelling previous Hold1 timer."
+                    )
+                hold_timer.cancel()
+                hold_timer = None
+            remaining_time = input_button_start_time + hold1_hold_value - curtime
+            if _DEBUG:
+                gremlin.util.log(
+                    f"{_PLUGIN_NAME}: Timed release for Hold1 is {remaining_time} s from now."
+                )
+            if remaining_time < 0:
+                if _DEBUG:
+                    gremlin.util.log(
+                        f"{_PLUGIN_NAME}: Hold1 Hold time exceeded, sending release immediately."
+                    )
+                output_button(False, vjoy)
+            else:
+                hold_timer = threading.Timer(remaining_time, stop_hold, args=[vjoy])
+                hold_timer.start()
         else:
             if _DEBUG:
-                gremlin.util.log(f"{_PLUGIN_NAME}: (release) Hold1 is not enabled.")
+                gremlin.util.log(
+                    f"{_PLUGIN_NAME}: (release) Hold1 and Hold2 not enabled/activated."
+                )
             output_button(False, vjoy)
