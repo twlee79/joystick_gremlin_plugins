@@ -67,3 +67,6 @@ first. Setting a longer tempo delay to `Hold 2` will therefore ensure it is only
 activated if this longer time is exceeded, otherwise `Hold 1` is processed. If
 a shorter tempo delay is used for `Hold 2`, it will always activate and `Hold 1`
 will never be processed.
+
+Note: This repository also has some test/example Joystick Gremlin plugins that
+are not described here.
