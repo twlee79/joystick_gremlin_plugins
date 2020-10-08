@@ -14,7 +14,7 @@ customisable circumstances.
 
 
 _PLUGIN_NAME = "ButtonHold"
-_VERSION = '0.9dev1'
+_VERSION = '0.9dev2'
 # -------------------------------------------------------------------------------
 # Author:       Tet Woo Lee
 #
@@ -27,6 +27,10 @@ _VERSION = '0.9dev1'
 
 # -------------------------------------------------------------------------------
 # ### Change log
+#
+# version 0.9dev2 2020-10-09
+# : Removed physical modifier, user can map a physical button to a vjoy button
+# for use as a modifier
 #
 # version 0.9dev1 2020-10-09
 # : Initial working version, with two holds, tempo delay, physical/virtual 
@@ -95,20 +99,9 @@ hold1_hold_time = FloatVariable(
     max_value=1e6,
 )
 
-hold1_use_modifier = BoolVariable(
-    "Hold 1: Use Modifier", "Enables modifier button for hold 1.", False
-)
-
-hold1_modifier_btn = PhysicalInputVariable(
-    "Hold 1: Modifier Button (physical)",
-    "Button which must be pressed to activate hold 1.",
-    [gremlin.common.InputType.JoystickButton],
-    is_optional=True,
-)
-
-# add both a physical button and vjoy modifier, to allow users to use either
+# add only vjoy modifer, user can map a physical button to a vjoy button if needed
 hold1_use_vjoy_modifier = BoolVariable(
-    "Hold 1: Use vJoy Modifier", "Enables vJoy modifier button for hold 1.", False
+    "Hold 1: Use Modifier", "Enables vJoy modifier button for hold 1.", False
 )
 
 hold1_vjoy_modifier_btn = VirtualInputVariable(
@@ -141,20 +134,9 @@ hold2_hold_time = FloatVariable(
     max_value=1e6,
 )
 
-hold2_use_modifier = BoolVariable(
-    "Hold 2: Use Modifier", "Enables modifier button for hold 2.", False
-)
-
-hold2_modifier_btn = PhysicalInputVariable(
-    "Hold 2: Modifier Button (physical)",
-    "Button which must be pressed to activate hold 2.",
-    [gremlin.common.InputType.JoystickButton],
-    is_optional=True,
-)
-
-# add both a physical button and vjoy modifier, to allow users to use either
+# add only vjoy modifer, user can map a physical button to a vjoy button if needed
 hold2_use_vjoy_modifier = BoolVariable(
-    "Hold 2: Use vJoy Modifier", "Enables vJoy modifier button for hold 2.", False
+    "Hold 2: Use Modifier", "Enables vJoy modifier button for hold 2.", False
 )
 
 hold2_vjoy_modifier_btn = VirtualInputVariable(
@@ -210,29 +192,11 @@ hold1_is_enabled = bool(hold1_enable.value)  # seems to have value '2' if enable
 hold1_tempo_value = hold1_tempo_delay.value
 hold1_hold_value = hold1_hold_time.value
 
-hold1_modifier_is_enabled = bool(hold1_use_modifier.value)
 hold1_vjoy_modifier_is_enabled = bool(hold1_use_vjoy_modifier.value)
 
 gremlin.util.log(
     f"{_PLUGIN_NAME}: Hold1 (Enabled: {hold1_is_enabled}) Tempo: {hold1_tempo_value} s; Hold {hold1_hold_value} s"
 )
-
-if hold1_modifier_is_enabled:
-    hold1_modifier_guid = hold1_modifier_btn.device_guid
-    hold1_modifier_input_id = hold1_modifier_btn.input_id
-    gremlin.util.log(
-        f"{_PLUGIN_NAME}: Hold1 modifier guid: {hold1_modifier_guid}; input_id {hold1_modifier_input_id}"
-    )
-    if hold1_modifier_guid is None or hold1_modifier_input_id is None:
-        hold1_modifier_is_enabled = False
-        gremlin.util.log(f"{_PLUGIN_NAME}: Hold1 modifier is invalid so is disabled")
-else:
-    hold1_modifier_guid = None
-    hold1_modifier_input_id = None
-
-if not hold1_modifier_is_enabled:
-    gremlin.util.log(f"{_PLUGIN_NAME}: Hold1 modifier disabled")
-
 
 if hold1_vjoy_modifier_is_enabled:
     hold1_vjoy_modifier_id = hold1_vjoy_modifier_btn.vjoy_id
@@ -252,29 +216,11 @@ hold2_is_enabled = bool(hold2_enable.value)  # seems to have value '2' if enable
 hold2_tempo_value = hold2_tempo_delay.value
 hold2_hold_value = hold2_hold_time.value
 
-hold2_modifier_is_enabled = bool(hold2_use_modifier.value)
 hold2_vjoy_modifier_is_enabled = bool(hold2_use_vjoy_modifier.value)
 
 gremlin.util.log(
     f"{_PLUGIN_NAME}: Hold2 (Enabled: {hold2_is_enabled}) Tempo: {hold2_tempo_value} s; Hold {hold2_hold_value} s"
 )
-
-if hold2_modifier_is_enabled:
-    hold2_modifier_guid = hold2_modifier_btn.device_guid
-    hold2_modifier_input_id = hold2_modifier_btn.input_id
-    gremlin.util.log(
-        f"{_PLUGIN_NAME}: Hold2 modifier guid: {hold2_modifier_guid}; input_id {hold2_modifier_input_id}"
-    )
-    if hold2_modifier_guid is None or hold2_modifier_input_id is None:
-        hold2_modifier_is_enabled = False
-        gremlin.util.log(f"{_PLUGIN_NAME}: Hold2 modifier is invalid so is disabled")
-else:
-    hold2_modifier_guid = None
-    hold2_modifier_input_id = None
-
-if not hold2_modifier_is_enabled:
-    gremlin.util.log(f"{_PLUGIN_NAME}: Hold2 modifier disabled")
-
 
 if hold2_vjoy_modifier_is_enabled:
     hold2_vjoy_modifier_id = hold2_vjoy_modifier_btn.vjoy_id
@@ -318,16 +264,7 @@ def stop_hold(vjoy):
 
 def check_hold1_modifier(joy, vjoy):
     # if a modifier is enabled, return state of modifier
-    if hold1_modifier_is_enabled:
-        modifier_state = (
-            joy[hold1_modifier_guid].button(hold1_modifier_input_id).is_pressed
-        )
-        if _DEBUG:
-            gremlin.util.log(
-                f"{_PLUGIN_NAME}: Hold1 modifier enabled; pressed: {modifier_state}"
-            )
-        return modifier_state
-    elif hold1_vjoy_modifier_is_enabled:
+    if hold1_vjoy_modifier_is_enabled:
         modifier_state = (
             vjoy[hold1_vjoy_modifier_id].button(hold1_vjoy_modifier_input_id).is_pressed
         )
@@ -345,16 +282,7 @@ def check_hold1_modifier(joy, vjoy):
 
 def check_hold2_modifier(joy, vjoy):
     # if a modifier is enabled, return state of modifier
-    if hold2_modifier_is_enabled:
-        modifier_state = (
-            joy[hold2_modifier_guid].button(hold2_modifier_input_id).is_pressed
-        )
-        if _DEBUG:
-            gremlin.util.log(
-                f"{_PLUGIN_NAME}: Hold2 modifier enabled; pressed: {modifier_state}"
-            )
-        return modifier_state
-    elif hold2_vjoy_modifier_is_enabled:
+    if hold2_vjoy_modifier_is_enabled:
         modifier_state = (
             vjoy[hold2_vjoy_modifier_id].button(hold2_vjoy_modifier_input_id).is_pressed
         )

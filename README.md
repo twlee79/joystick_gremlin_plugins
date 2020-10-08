@@ -54,11 +54,14 @@ a user comment.
 button is held down for > this time, the programmed timed release will activate
 (provided any modifier options also pass).
 
-`Hold 1: Use vJoy Modifier`: Enables `Hold 1: Modifier Button (vJoy)`.
+`Hold 1: Use Modifier`: Enables `Hold 1: Modifier Button (vJoy)`.
 
 `Hold 1: Modifier Button (vJoy)`: vJoy button that must be pressed when a
 release of physical button is processed in order to activate hold 1. This is
 tested in addition to any tempo delay.
+
+Note that the modifier must be a vJoy button. Therefore, a user must map a
+physical button to a vJoy button for use as a modifier.
 
 All the `Hold 1` options are repeated for a second optional `Hold 2`. Note that
 if only different tempo times differentiate `Hold 1` and `Hold 2`, then the longer
