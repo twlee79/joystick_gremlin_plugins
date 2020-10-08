@@ -12,7 +12,8 @@ _DEBUG = True # extra log messages
 description = StringVariable(
     "Description",
     "Description of this plugin action",
-    "")
+    "",
+    is_optional = True)
 
 mode = ModeVariable("Mode", "The mode to use for this mapping")
 
@@ -31,9 +32,11 @@ vjoy_btn = VirtualInputVariable(
 hold1_enable = BoolVariable("Hold 1: Enable", "Enables Hold 1.", False)
 
 hold1_description = StringVariable(
-    "Hold1: Description",
+    "Hold 1: Description",
     "Description of hold 1 plugin action",
-    "")
+    "",
+    is_optional = True
+    )
 
 hold1_tempo_delay = FloatVariable(
     "Hold 1: Tempo Delay",
@@ -58,6 +61,7 @@ hold1_modifier_btn = PhysicalInputVariable(
     "Hold 1: Modifier Button (physical)",
     "Button which must be pressed to activate hold 1.",
     [gremlin.common.InputType.JoystickButton],
+    is_optional = True
 )
 
 # add both a physical button and vjoy modifier, to allow users to use either
@@ -69,6 +73,7 @@ hold1_vjoy_modifier_btn = VirtualInputVariable(
     "Hold 1: Modifier Button (vJoy)",
     "vJoy button which must be pressed to activate hold 1.",
     [gremlin.common.InputType.JoystickButton],
+    is_optional = True
 )
 
 
@@ -109,6 +114,9 @@ if hold1_modifier_is_enabled:
     gremlin.util.log(
         f"{_PLUGIN_NAME}: Hold1 modifier guid: {hold1_modifier_guid}; input_id {hold1_modifier_input_id}"
     )
+    if hold1_modifier_guid is None or hold1_modifier_input_id is None:
+        hold1_modifier_is_enabled = False
+        gremlin.util.log(f"{_PLUGIN_NAME}: Hold1 modifier is invalid so is disabled")
 else:
     hold1_modifier_guid = None
     hold1_modifier_input_id = None
