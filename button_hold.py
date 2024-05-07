@@ -176,6 +176,26 @@ hold2_vjoy_modifier_btn = VirtualInputVariable(
     is_optional=True,
 )
 
+# Repeat mode options
+repeat_enable = BoolVariable("Enable repeat mode", "Repeated button presses instead of continuous hold.", False)
+
+repeat_on_time = FloatVariable(
+    "Repeat: On time",
+    "Length of time to press button (s)",
+    initial_value=0.2,
+    min_value=0,
+    max_value=1e6,
+)
+
+repeat_btw_time = FloatVariable(
+    "Repeat: Between time",
+    "Length of time between start of each press (s)",
+    initial_value=8.0,
+    min_value=0,
+    max_value=1e6,
+)
+
+
 enable_debug = BoolVariable(
     "Enable Debug Mode", "Produces additional log messages.", False
 )
@@ -277,6 +297,11 @@ else:
 if not hold2_vjoy_modifier_is_enabled:
     gremlin.util.log(f"{_PLUGIN_NAME}: Hold2 vJoy modifier disabled")
 
+# Load options for repeat
+repeat_is_enabled = bool(repeat_enable.value)  # seems to have value '2' if enabled?
+repeat_on_time_value = repeat_on_time.value
+repeat_btw_time_value = repeat_btw_time.value
+
 
 # Prepare decorator
 if not btn_input.value:
@@ -287,24 +312,77 @@ input_decorator = btn_input.create_decorator(mode.value)
 # State variables
 input_button_start_time = 0
 hold_timer = None
+output_state = False
+
+press_timer = None
+repeat_timer = None
 
 # Implementation
-
+def press_button(pressed_state, vjoy):
+    if _DEBUG:
+        gremlin.util.log(f"{_PLUGIN_NAME}: Setting output button state to {pressed_state}")
+    vjoy[target_vjoy_id].button(target_input_id).is_pressed = pressed_state
 
 def output_button(pressed_state, vjoy):
     if _DEBUG:
-        gremlin.util.log(f"{_PLUGIN_NAME}: Setting output state to {pressed_state}")
-    vjoy[target_vjoy_id].button(target_input_id).is_pressed = pressed_state
-
+        gremlin.util.log(f"{_PLUGIN_NAME}: Setting hold/repeat state to {pressed_state}")
+    output_state = pressed_state
+    if not repeat_is_enabled:
+        press_button(pressed_state, vjoy)
+    else: # repeat mode
+        if pressed_state is True: # start repeats
+            do_repeat(vjoy)
+        else: # end repeats
+            global press_timer, repeat_timer
+            # cancel any existing press or repeat timers
+            if press_timer:
+                press_timer.cancel()
+                press_timer = None
+            if repeat_timer:
+                repeat_timer.cancel()
+                repeat_timer = None
+            press_button(False, vjoy)
 
 # Called by a threading.Timer
 def stop_hold(vjoy):
     if _DEBUG:
-        gremlin.util.log(f"{_PLUGIN_NAME}: Ending hold from timer.")
+        gremlin.util.log(f"{_PLUGIN_NAME}: Ending hold from hold timer.")
     global hold_timer
     output_button(False, vjoy)
     hold_timer = None
 
+# Called by a threading.Timer and manually to start repeats
+# Do a button press repeat, basically press and start timer to end press
+def do_repeat(vjoy):
+    if _DEBUG:
+        gremlin.util.log(f"{_PLUGIN_NAME}: Performing repeat.")
+    global press_timer, repeat_timer
+    
+    # cancel any existing press or repeat timers
+    if press_timer:
+        press_timer.cancel()
+        press_timer = None
+    if repeat_timer:
+        repeat_timer.cancel()
+        repeat_timer = None
+    
+    press_button(True, vjoy)
+    # timer to end this press
+    press_timer = threading.Timer(repeat_on_time_value, stop_this_press, args=[vjoy])
+    press_timer.start()
+
+    # timer for next repeat
+    repeat_timer = threading.Timer(repeat_btw_time_value, do_repeat, args=[vjoy])
+    repeat_timer.start()
+
+# Called by a threading.Timer
+# This ends current button release
+def stop_this_press(vjoy):
+    if _DEBUG:
+        gremlin.util.log(f"{_PLUGIN_NAME}: Ending press from press timer.")
+    global press_timer
+    press_button(False, vjoy)
+    press_timer = None
 
 def check_hold1_modifier(joy, vjoy):
     # if a modifier is enabled, return state of modifier
