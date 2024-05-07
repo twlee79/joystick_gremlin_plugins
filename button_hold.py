@@ -3,7 +3,7 @@ import time
 import threading
 
 from gremlin.user_plugin import *
-
+    
 """
 Joystick Gremlin Button Hold Plugin
 
@@ -14,7 +14,7 @@ customisable circumstances.
 
 
 _PLUGIN_NAME = "ButtonHold"
-_VERSION = '1.0'
+_VERSION = '1.1'
 # -------------------------------------------------------------------------------
 # Author:       Tet Woo Lee
 #
@@ -27,6 +27,10 @@ _VERSION = '1.0'
 
 # -------------------------------------------------------------------------------
 # ### Change log
+#
+# version 1.1 2024-05-08
+# : Add repeat option for performing repeated keypresses instead of holds.
+# : Add output key instead of button.
 #
 # version 1.0 2020-10-09
 # : First release version.
@@ -66,9 +70,13 @@ vjoy_btn = VirtualInputVariable(
     [gremlin.common.InputType.JoystickButton],
 )
 
+output_key_name = StringVariable(
+    "Output Key", "Output key name, overrides any button above", "", is_optional=True
+)
+
 alternating_mode_enable = BoolVariable(
     "Enable Alternating Mode", 
-    "Enables alternating hold/cancel mode.", 
+    "Enables alternating hold/cancel mode: First press enables, second press cancels.", 
     False)
 
 cancel_enable = BoolVariable("Enable Cancel Button", "Enables cancel button.", False)
@@ -79,6 +87,8 @@ tempo_cancel_btn = PhysicalInputVariable(
     [gremlin.common.InputType.JoystickButton],
     is_optional=True,
 )
+
+ontempo_enable = BoolVariable("Execute only on tempo detection", "Waits for release to check if tempo criterion passes before executing (or not)", False)
 
 # Two set of hold options are enabled, which can be set with different tempos
 # or different modifiers
@@ -211,9 +221,26 @@ gremlin.util.log(f"{_PLUGIN_NAME}: Mode is {mode.value}")
 target_vjoy_id = vjoy_btn.vjoy_id
 target_input_id = vjoy_btn.input_id
 
-gremlin.util.log(
-    f"{_PLUGIN_NAME}: Target vjoy_id: {target_vjoy_id}; input_id {target_input_id}"
-)
+# set key to override button if present
+output_key_value = output_key_name.value
+if output_key_value:
+    output_key = gremlin.macro.key_from_name(output_key_value)
+    # create keypress macros to use repeatedly
+    keydown_macro = gremlin.macro.Macro()
+    keydown_macro.add_action(gremlin.macro.KeyAction(output_key, True))
+
+    keyup_macro = gremlin.macro.Macro()
+    keyup_macro.add_action(gremlin.macro.KeyAction(output_key, False))
+    gremlin.util.log(
+        f"{_PLUGIN_NAME}: Target key name: {output_key_value}"
+    )
+else:
+    output_key = None
+    gremlin.util.log(
+        f"{_PLUGIN_NAME}: Target vjoy_id: {target_vjoy_id}; input_id {target_input_id}"
+    )
+
+
 
 alternating_mode_is_enabled = bool(alternating_mode_enable.value)
 
@@ -248,6 +275,11 @@ if cancel_is_enabled:
 
 if not cancel_is_enabled:
     gremlin.util.log(f"{_PLUGIN_NAME}: Cancel button disabled")
+
+# On tempo only
+execute_ontempo_only = bool(ontempo_enable.value)
+if execute_ontempo_only:
+    gremlin.util.log(f"{_PLUGIN_NAME}: Executing on button release if tempo succeeds only")
 
 # Load options for hold1
 hold1_is_enabled = bool(hold1_enable.value)  # seems to have value '2' if enabled?
@@ -302,6 +334,10 @@ repeat_is_enabled = bool(repeat_enable.value)  # seems to have value '2' if enab
 repeat_on_time_value = repeat_on_time.value
 repeat_btw_time_value = repeat_btw_time.value
 
+gremlin.util.log(
+    f"{_PLUGIN_NAME}: Repeat (Enabled: {hold2_is_enabled}) Press time: {repeat_on_time_value} s; Repeat every {repeat_btw_time_value} s"
+)
+
 
 # Prepare decorator
 if not btn_input.value:
@@ -311,29 +347,53 @@ input_decorator = btn_input.create_decorator(mode.value)
 
 # State variables
 input_button_start_time = 0
+    # records when the input button was first pressed
+    # (for processing tempo)
+input_button_currently_pressed = False
+    # used to track current state of input button
+    # if `True`, repeats will be executed regardless of `hold_timer` status
+    # should be `True` when starting repeats because `hold_timer` is usually
+    # started after repeats have started
 hold_timer = None
-output_state = False
-
-press_timer = None
+    # timer for ending hold
+    # in repeat mode, script will test `if hold_timer` to determine whether 
+    # to continue repeats, so ensure this is set to `None` if cancelled or
+    # when timer executes
+press_timer = None 
+    # timer for button release after press
+    # if timer is cancelled, ensure press_button(False, vJoy) is called to
+    # release the button
 repeat_timer = None
+    # timer for next repeat
+    # if timer is cancelled, no action is necessary
 
 # Implementation
-def press_button(pressed_state, vjoy):
+def press_vjoy(pressed_state, vjoy):
     if _DEBUG:
         gremlin.util.log(f"{_PLUGIN_NAME}: Setting output button state to {pressed_state}")
     vjoy[target_vjoy_id].button(target_input_id).is_pressed = pressed_state
 
+def press_key(pressed_state, vjoy):
+    if _DEBUG:
+        gremlin.util.log(f"{_PLUGIN_NAME}: Setting key state to {pressed_state}")
+    if pressed_state:
+        gremlin.macro.MacroManager().queue_macro(keydown_macro)
+    else:
+        gremlin.macro.MacroManager().queue_macro(keyup_macro)
+
+# define press function
+press_button = press_key if output_key else press_vjoy
+
 def output_button(pressed_state, vjoy):
     if _DEBUG:
-        gremlin.util.log(f"{_PLUGIN_NAME}: Setting hold/repeat state to {pressed_state}")
-    output_state = pressed_state
+        gremlin.util.log(f"{_PLUGIN_NAME}: Setting hold state to {pressed_state}")
     if not repeat_is_enabled:
         press_button(pressed_state, vjoy)
     else: # repeat mode
         if pressed_state is True: # start repeats
             do_repeat(vjoy)
         else: # end repeats
-            global press_timer, repeat_timer
+            global press_timer, repeat_timer, hold_timer
             # cancel any existing press or repeat timers
             if press_timer:
                 press_timer.cancel()
@@ -341,9 +401,15 @@ def output_button(pressed_state, vjoy):
             if repeat_timer:
                 repeat_timer.cancel()
                 repeat_timer = None
-            press_button(False, vjoy)
+            if hold_timer:
+                # this should not be necessary
+                hold_timer.cancel()
+                hold_timer = None
+                if _DEBUG:
+                    gremlin.util.log(f"{_PLUGIN_NAME}: Warning needing to cancel hold timer in `output_button()`")
+            press_button(False, vjoy) # ensure button is released
 
-# Called by a threading.Timer
+# Called by a `threading.Timer` for `hold_timer`
 def stop_hold(vjoy):
     if _DEBUG:
         gremlin.util.log(f"{_PLUGIN_NAME}: Ending hold from hold timer.")
@@ -351,8 +417,14 @@ def stop_hold(vjoy):
     output_button(False, vjoy)
     hold_timer = None
 
-# Called by a threading.Timer and manually to start repeats
-# Do a button press repeat, basically press and start timer to end press
+# Called by a `threading.Timer` for `repeat_timer`
+# Also called to being repeats
+# Does a button press repeat:
+#   Cancel any existing press/repeat timers
+#   If hold active:
+#       Press button
+#       Start timer to end press
+#       Start timer for next press
 def do_repeat(vjoy):
     if _DEBUG:
         gremlin.util.log(f"{_PLUGIN_NAME}: Performing repeat.")
@@ -365,17 +437,24 @@ def do_repeat(vjoy):
     if repeat_timer:
         repeat_timer.cancel()
         repeat_timer = None
-    
-    press_button(True, vjoy)
-    # timer to end this press
-    press_timer = threading.Timer(repeat_on_time_value, stop_this_press, args=[vjoy])
-    press_timer.start()
 
-    # timer for next repeat
-    repeat_timer = threading.Timer(repeat_btw_time_value, do_repeat, args=[vjoy])
-    repeat_timer.start()
+    gremlin.util.log(f"{_PLUGIN_NAME}: input {input_button_currently_pressed}.")
+    if hold_timer or input_button_currently_pressed:
+        if _DEBUG:
+            gremlin.util.log(f"{_PLUGIN_NAME}: Executing repeat and queuing next.")
+        press_button(True, vjoy)
+        # timer to end this press
+        press_timer = threading.Timer(repeat_on_time_value, stop_this_press, args=[vjoy])
+        press_timer.start()
 
-# Called by a threading.Timer
+        # timer for next repeat
+        repeat_timer = threading.Timer(repeat_btw_time_value, do_repeat, args=[vjoy])
+        repeat_timer.start()
+    else:
+        if _DEBUG:
+            gremlin.util.log(f"{_PLUGIN_NAME}: Hold timer has been cancelled, ending repeats.")
+
+# Called by a `threading.Timer` for `press_timer`
 # This ends current button release
 def stop_this_press(vjoy):
     if _DEBUG:
@@ -424,16 +503,19 @@ def check_hold2_modifier(joy, vjoy):
 def input_button(event, joy, vjoy):
     if _DEBUG:
         gremlin.util.log(f"{_PLUGIN_NAME}: Input button state: {event.is_pressed}")
-    global input_button_start_time, hold_timer
+    global input_button_start_time, hold_timer, input_button_currently_pressed
     if event.is_pressed:
         if _DEBUG:
             gremlin.util.log(f"{_PLUGIN_NAME}: Processing press...")
-        # send 'pressed' to target
-        output_button(True, vjoy)
+        if not execute_ontempo_only:
+            # send 'pressed' to target
+            input_button_currently_pressed = True
+            output_button(True, vjoy)
+            # if executing ontempo only, wait for next step before pressing
         if alternating_mode_is_enabled and hold_timer:
-            # in alternating mode, any existing timer is cancel and no new
+            # in alternating mode, any existing timer is cancelled and no new
             # timer is started
-            # this is to allow a user to cancel a time and trigger a release
+            # this is to allow a user to cancel a timer and trigger a release
             # by pressing the button and releasing it
             if _DEBUG:
                 gremlin.util.log(f"{_PLUGIN_NAME}: Alternating mode, cancelling timer.")
@@ -465,10 +547,17 @@ def input_button(event, joy, vjoy):
         ):
             if _DEBUG:
                 gremlin.util.log(f"{_PLUGIN_NAME}: Hold2 Tempo activated.")
-            # tempo activated
-            # activate hold: start thread and do not release until
-            #   reaching input_button_start_time + hold2_hold_time
-            remaining_time = input_button_start_time + hold2_hold_value - curtime
+            # hold2 tempo activated
+            if not execute_ontempo_only: 
+                # activate hold: start thread and do not release until
+                #   reaching input_button_start_time + hold2_hold_time
+                remaining_time = input_button_start_time + hold2_hold_value - curtime
+            else:
+                # execute ontempo, starting with first press
+                input_button_currently_pressed = True
+                output_button(True, vjoy)
+                remaining_time = input_button_start_time
+
             if _DEBUG:
                 gremlin.util.log(
                     f"{_PLUGIN_NAME}: Timed release for Hold2 is {remaining_time} s from now."
@@ -489,10 +578,17 @@ def input_button(event, joy, vjoy):
         ):
             if _DEBUG:
                 gremlin.util.log(f"{_PLUGIN_NAME}: Hold1 Tempo activated.")
-            # tempo activated
-            # activate hold: start thread and do not release until
-            #   reaching input_button_start_time + hold1_hold_time
-            remaining_time = input_button_start_time + hold1_hold_value - curtime
+            # hold1 tempo activated
+            if not execute_ontempo_only: 
+                # activate hold: start thread and do not release until
+                #   reaching input_button_start_time + hold1_hold_time
+                remaining_time = input_button_start_time + hold1_hold_value - curtime
+            else:
+                # execute ontempo, starting with first press
+                input_button_currently_pressed = True
+                output_button(True, vjoy)
+                remaining_time = input_button_start_time
+            
             if _DEBUG:
                 gremlin.util.log(
                     f"{_PLUGIN_NAME}: Timed release for Hold1 is {remaining_time} s from now."
@@ -512,3 +608,4 @@ def input_button(event, joy, vjoy):
                     f"{_PLUGIN_NAME}: (release) Hold1 and Hold2 not enabled/activated."
                 )
             output_button(False, vjoy)
+        input_button_currently_pressed = False
