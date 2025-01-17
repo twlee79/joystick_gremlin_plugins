@@ -14,7 +14,7 @@ customisable circumstances.
 
 
 _PLUGIN_NAME = "ButtonHold"
-_VERSION = '1.1'
+_VERSION = '1.2'
 # -------------------------------------------------------------------------------
 # Author:       Tet Woo Lee
 #
@@ -27,6 +27,9 @@ _VERSION = '1.1'
 
 # -------------------------------------------------------------------------------
 # ### Change log
+#
+# version 1.2 2025-01-17
+# : Add optional second output button.
 #
 # version 1.1 2024-05-08
 # : Add repeat option for performing repeated keypresses instead of holds.
@@ -66,6 +69,16 @@ btn_input = PhysicalInputVariable(
 
 vjoy_btn = VirtualInputVariable(
     "Output Button",
+    "vJoy button to use as the output.",
+    [gremlin.common.InputType.JoystickButton],
+)
+
+vjoy_btn2_use = BoolVariable(
+    "Second Output: Use", "Enables second output.", False
+)
+
+vjoy_btn2 = VirtualInputVariable(
+    "Second Output",
     "vJoy button to use as the output.",
     [gremlin.common.InputType.JoystickButton],
 )
@@ -240,7 +253,19 @@ else:
         f"{_PLUGIN_NAME}: Target vjoy_id: {target_vjoy_id}; input_id {target_input_id}"
     )
 
-
+target2_enabled = bool(vjoy_btn2_use)
+if target2_enabled:
+    target2_vjoy_id = vjoy_btn2.vjoy_id
+    target2_input_id = vjoy_btn2.input_id
+    gremlin.util.log(
+        f"{_PLUGIN_NAME}: Second target vjoy_id: {target2_vjoy_id}; input_id {target2_input_id}"
+    )
+else:
+    target2_vjoy_id = None
+    target2_input_id = None
+    gremlin.util.log(
+        f"{_PLUGIN_NAME}: Second target disabled"
+    )
 
 alternating_mode_is_enabled = bool(alternating_mode_enable.value)
 
@@ -368,21 +393,25 @@ repeat_timer = None
     # if timer is cancelled, no action is necessary
 
 # Implementation
-def press_vjoy(pressed_state, vjoy):
-    if _DEBUG:
-        gremlin.util.log(f"{_PLUGIN_NAME}: Setting output button state to {pressed_state}")
-    vjoy[target_vjoy_id].button(target_input_id).is_pressed = pressed_state
-
-def press_key(pressed_state, vjoy):
-    if _DEBUG:
-        gremlin.util.log(f"{_PLUGIN_NAME}: Setting key state to {pressed_state}")
-    if pressed_state:
-        gremlin.macro.MacroManager().queue_macro(keydown_macro)
-    else:
-        gremlin.macro.MacroManager().queue_macro(keyup_macro)
 
 # define press function
-press_button = press_key if output_key else press_vjoy
+def press_button(pressed_state, vjoy):
+    if output_key:
+        if _DEBUG:
+            gremlin.util.log(f"{_PLUGIN_NAME}: Setting key state to {pressed_state}")
+        if pressed_state:
+            gremlin.macro.MacroManager().queue_macro(keydown_macro)
+        else:
+            gremlin.macro.MacroManager().queue_macro(keyup_macro)
+    else:
+        if _DEBUG:
+            gremlin.util.log(f"{_PLUGIN_NAME}: Setting output button state to {pressed_state}")
+        vjoy[target_vjoy_id].button(target_input_id).is_pressed = pressed_state
+
+    if target2_enabled:
+        if _DEBUG:
+            gremlin.util.log(f"{_PLUGIN_NAME}: Setting second output state to {pressed_state}")
+        vjoy[target2_vjoy_id].button(target2_input_id).is_pressed = pressed_state
 
 def output_button(pressed_state, vjoy):
     if _DEBUG:
